@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "MiNiMe",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/inc",
+                "/usr/lib64/mysql",
+                "/usr/include/mysql"
+            ],
+            "defines": [],
+            "compilerPath": "/opt/rh/devtoolset-10/root/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

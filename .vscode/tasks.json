@@ -1,0 +1,40 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cppbuild",
+			"label": "C/C++: g++ 生成活动文件",
+			"command": "/opt/rh/devtoolset-10/root/usr/bin/g++",
+			"args": [
+				"-std=c++17",
+				"-fdiagnostics-color=always",
+				"-g",
+				"main.cpp",
+				"MiNiMe.cpp",
+				"-o",
+				"${fileDirname}/../build/${fileBasenameNoExtension}",
+				"-I",
+				"${fileDirname}/../inc/",
+				"-I",
+				"/usr/include/mysql/",
+				"-L",
+				"/usr/lib64/mysql/",
+				"-levent",
+				"-lmysqlclient",
+				"-lssl",
+				"-lcrypto"
+			],
+			"options": {
+				"cwd": "${fileDirname}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"detail": "编译器: /opt/rh/devtoolset-10/root/usr/bin/g++"
+		}
+	]
+}

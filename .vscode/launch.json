@@ -1,0 +1,34 @@
+{
+    "configurations": [
+        {
+            "name": "C/C++: g++ 生成和调试活动文件",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${fileDirname}/../build/${fileBasenameNoExtension}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "为 gdb 启用整齐打印",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "将反汇编风格设置为 Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "existing": false,
+            "preLaunchTask": "C/C++: g++ 生成活动文件",
+            "detail": "preLaunchTask: C/C++: g++ 生成活动文件",
+            "taskDetail": "编译器: /opt/rh/devtoolset-10/root/usr/bin/g++",
+            "taskStatus": "Detected Task",
+            "miDebuggerPath": "gdb"
+        }
+    ]
+}
