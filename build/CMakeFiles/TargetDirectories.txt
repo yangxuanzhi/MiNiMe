@@ -1,3 +1,0 @@
-/home/aa/MiNiMe/build/CMakeFiles/MiNiMe.dir
-/home/aa/MiNiMe/build/CMakeFiles/edit_cache.dir
-/home/aa/MiNiMe/build/CMakeFiles/rebuild_cache.dir
