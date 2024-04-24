@@ -28,6 +28,13 @@ static void send_response(evhttp_request *req, int code, const char *reason, con
     evbuffer_free(reply);
 }
 
+static void timer_cb(evutil_socket_t fd, short ev, void *arg) {
+    controller.checkToken();
+    
+    timeval tv{1, 0};
+    evtimer_add((event*)arg, &tv);
+}
+
 static void signal_cb(evutil_socket_t fd, short event, void *arg)
 {
     printf("%s signal received\n", strsignal(fd));
@@ -165,7 +172,14 @@ int main()
     event *sig_int = evsignal_new(base, SIGINT, signal_cb, base);
     event_add(sig_int, nullptr);
 
-    cout << "开始监听 " << http_addr << ":" << http_port << endl;
+    event *timer_ev = new event;
+    evtimer_assign(timer_ev, base, timer_cb, timer_ev);
+
+    timeval tv{1, 0};
+    evtimer_add(timer_ev, &tv);
+
+    cout << "\033[34m[" << MiNiMe::getCurrentTime() << "]\033[0m "
+         << "开始监听 " << http_addr << ":" << http_port << endl;
 
     event_base_dispatch(base);
 

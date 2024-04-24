@@ -3,22 +3,16 @@
 //
 
 #include "MiNiMe.hpp"
-#include <iostream>
-#include <cstdio>
-#include <cstring>
-#include <iomanip>
-#include <sstream>
-#include <chrono>
-#include <tuple>
-#include <openssl/sha.h>
 
 using namespace std;
 
 MiNiMe::MiNiMe() = default;
 
-bool MiNiMe::registerUser(const string &username, const string &password) {
+bool MiNiMe::registerUser(const string &username, const string &password)
+{
     bool res = false;
-    cout << "用户注册请求：" << username << ", " << password << endl;
+    cout << "\033[34m[" << MiNiMe::getCurrentTime() << "]\033[0m "
+         << "用户注册请求：" << username << ", " << password << endl;
 
     MYSQL *mysql = mysql_init(nullptr);
     if (mysql == nullptr) {
@@ -40,7 +34,7 @@ bool MiNiMe::registerUser(const string &username, const string &password) {
     // 查询是否已经存在用户
     // 执行SQL语句
     if (mysql_query(conn, buf) != 0) {
-        cerr << mysql_error(mysql) << endl;
+        cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
         mysql_close(conn);
         return false;
     } else {
@@ -56,11 +50,11 @@ bool MiNiMe::registerUser(const string &username, const string &password) {
     }
 
     memset(buf, 0, sizeof(buf));
-    string login_time = MiNiMe::getLoginTime();
+    string login_time = MiNiMe::getCurrentTime();
     sprintf(buf, R"(insert into user values(0, "%s", "%s", "%s");)", username.c_str(), password.c_str(), login_time.c_str());
 
     if (mysql_query(conn, buf) != 0) {
-        cerr << mysql_error(mysql) << endl;
+        cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
     } else {
         cout << "\t用户注册成功！" << endl;
         res = true;
@@ -70,9 +64,11 @@ bool MiNiMe::registerUser(const string &username, const string &password) {
     return res;
 }
 
-tuple<int, string> MiNiMe::loginUser(const string &username, const string &password) {
+tuple<int, string> MiNiMe::loginUser(const string &username, const string &password)
+{
     string res;
-    cout << "用户登录请求：" << username << ", " << password << endl;
+    cout << "\033[34m[" << MiNiMe::getCurrentTime() << "]\033[0m "
+         << "用户登录请求：username=" << username << ", password=" << password << endl;
 
     MYSQL *mysql = mysql_init(nullptr);
     if (mysql == nullptr) {
@@ -93,7 +89,7 @@ tuple<int, string> MiNiMe::loginUser(const string &username, const string &passw
 
     string uid;
     if (mysql_query(conn, buf) != 0) {
-        cerr << mysql_error(mysql) << endl;
+        cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
         mysql_close(conn);
         return {-1, res};
     } else {
@@ -114,18 +110,14 @@ tuple<int, string> MiNiMe::loginUser(const string &username, const string &passw
     }
 
     // 登录
-    string login_time = MiNiMe::getLoginTime();
+    string login_time = MiNiMe::getCurrentTime();
     string token = generateLoginToken(username, password, login_time);
 
     memset(buf, 0, sizeof(buf));
     sprintf(buf, R"(update user set last_login="%s" where uid=%s)", login_time.c_str(), uid.c_str());
 
     if (mysql_query(conn, buf) != 0) {
-        cerr << mysql_error(mysql) << endl;
-    } else {
-        char cout_buf[1024]{0};
-        sprintf(cout_buf, "\t[%s] 用户%s登录，token为%s！", login_time.c_str(), username.c_str(), token.c_str());
-        cout << cout_buf << endl;
+        cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
     }
 
     // 查询login_token是否存在
@@ -133,12 +125,13 @@ tuple<int, string> MiNiMe::loginUser(const string &username, const string &passw
     sprintf(buf, R"(select uid from login_token where uid=%s)", uid.c_str());
 
     if (mysql_query(conn, buf) != 0) {
-        cerr << mysql_error(mysql) << endl;
+        cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
         mysql_close(conn);
         return {-1, res};
     } else {
         MYSQL_RES *result = mysql_store_result(conn);
         uint row_num = mysql_num_rows(result);
+        mysql_free_result(result);
         res = token;
         if (row_num <= 0) {
             // insert
@@ -146,12 +139,12 @@ tuple<int, string> MiNiMe::loginUser(const string &username, const string &passw
             sprintf(buf, R"(insert into login_token values(%s, "%s", "%s"))", uid.c_str(), token.c_str(), login_time.c_str());
 
             if (mysql_query(conn, buf) != 0) {
-                cerr << mysql_error(mysql) << endl;
+                cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
                 mysql_close(conn);
                 return {-1, ""};
             } else {
                 char cout_buf[1024]{0};
-                sprintf(cout_buf, "\t用户%s登录成功，token为%s！", username.c_str(), token.c_str());
+                sprintf(cout_buf, "\t\033[34m[%s]\033[0m 用户 %s 登录成功，token为 %s！", login_time.c_str(), username.c_str(), token.c_str());
                 cout << cout_buf << endl;
             }
         } else {
@@ -160,23 +153,80 @@ tuple<int, string> MiNiMe::loginUser(const string &username, const string &passw
             sprintf(buf, R"(update login_token set token="%s", login_time="%s" where uid=%s)", token.c_str(), login_time.c_str(), uid.c_str());
 
             if (mysql_query(conn, buf) != 0) {
-                cerr << mysql_error(mysql) << endl;
+                cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
                 mysql_close(conn);
                 return {-1, ""};
             } else {
                 char cout_buf[1024]{0};
-                sprintf(cout_buf, "\t用户%s登录成功，token为%s！", username.c_str(), token.c_str());
+                sprintf(cout_buf, "\t\033[34m[%s]\033[0m 用户%s登录成功，token为%s！", login_time.c_str(), username.c_str(), token.c_str());
                 cout << cout_buf << endl;
             }
         }
-        mysql_free_result(result);
     }
 
     mysql_close(conn);
     return {stoi(uid), res};
 }
 
+void MiNiMe::checkToken()
+{
+    const auto now = std::chrono::system_clock::now();
+    const auto ten_minutes_ago = now - std::chrono::minutes(1);
+    const std::time_t t_c = std::chrono::system_clock::to_time_t(ten_minutes_ago);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&t_c), "%Y-%m-%d %H:%M:%S");
+    std::string ten_minutes_ago_str = ss.str();
 
+    MYSQL *mysql = mysql_init(nullptr);
+    if (mysql == nullptr) {
+        cerr << "Mysql对象初始化失败!" << endl;
+        return;
+    }
+
+    MYSQL *conn = mysql_real_connect(mysql, "192.168.0.182", "remote", "Mysql_abc123", "MiNiMe", 0, nullptr, 0);
+    if (conn == nullptr) {
+        cerr << mysql_error(mysql) << endl;
+        return;
+    }
+
+    // 查询超时token
+    char buf[1024] = {0};
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, R"(select uid from login_token where login_time < "%s")", ten_minutes_ago_str.c_str());
+
+    if (mysql_query(conn, buf) != 0) {
+        cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
+        mysql_close(conn);
+        return;
+    } else {
+        MYSQL_RES *result = mysql_store_result(conn);
+        uint row_num = mysql_num_rows(result);
+        if (row_num <= 0) {
+            mysql_free_result(result);
+            mysql_close(conn);
+            return;
+        }
+        MYSQL_ROW row;
+        // 获取数据
+        cout << "\033[34m[" << MiNiMe::getCurrentTime() << "]\033[0m" << "用户 \033[33m";
+        while ((row = mysql_fetch_row(result)) != nullptr) {
+            cout << row[0] << " ";
+        }
+        cout << "\033[0m超时下线" << endl;
+        mysql_free_result(result);
+    }
+
+    // 删除所有token过期的用户
+    buf[1024] = {0};
+    memset(buf, 0, sizeof(buf));
+    sprintf(buf, R"(delete from login_token where login_time < "%s")", ten_minutes_ago_str.c_str());
+
+    if (mysql_query(conn, buf) != 0) {
+        cerr << "\033[31mSQL语句" << buf << "错误\033[0m: " << mysql_error(mysql) << endl;
+    }
+
+    mysql_close(conn);
+}
 
 MiNiMe::~MiNiMe() = default;
 
@@ -200,7 +250,7 @@ string MiNiMe::generateLoginToken(const string &username, const string &password
     return ss.str();
 }
 
-string MiNiMe::getLoginTime() {
+string MiNiMe::getCurrentTime() {
     const auto now = std::chrono::system_clock::now();
     const std::time_t t_c = std::chrono::system_clock::to_time_t(now);
     stringstream ss;

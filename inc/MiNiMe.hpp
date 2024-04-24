@@ -5,7 +5,17 @@
 #ifndef MINIME_MINIME_HPP
 #define MINIME_MINIME_HPP
 
+#include <cstdio>
+#include <cstring>
+
 #include <string>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <chrono>
+#include <tuple>
+
+#include <openssl/sha.h>
 #include <mysql.h>
 using namespace std;
 
@@ -29,10 +39,13 @@ public:
      */
     tuple<int, string> loginUser(const string &username, const string &password);
 
+    void checkToken();
+
     ~MiNiMe();
+    
+    static string getCurrentTime();
 private:
     static string generateLoginToken(const std::string &username, const std::string &password, const string &login_time);
-    static string getLoginTime();
 };
 
 
