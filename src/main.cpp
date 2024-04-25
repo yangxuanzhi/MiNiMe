@@ -16,6 +16,8 @@
 #include <event2/listener.h>
 #include <event2/bufferevent.h>
 
+#include "configor/json.hpp"
+
 #include "MiNiMe.hpp"
 #include "log.hpp"
 #include "myutils.hpp"
@@ -112,21 +114,21 @@ static void login_request_handler(evhttp_request *req, void *arg) {
 
     size_t len = evbuffer_get_length(eb);
     if (len <= 0 || len > 1024) {
-        send_response(req, 400, nullptr, R"({"code":400, "op":"register", "info":"Invalid Request Length!"})");
+        send_response(req, 400, nullptr, R"({"code":400, "op":"login", "info":"Invalid Request Length!"})");
         evbuffer_free(eb);
         return;
     }
 
     char buf[1024]{0};
     if (-1 == evbuffer_remove(eb, buf, sizeof(buf))) {
-        send_response(req, 400, nullptr, R"({"code":400, "op":"register", "info":"Invalid Request!"})");
+        send_response(req, 400, nullptr, R"({"code":400, "op":"login", "info":"Invalid Request!"})");
         evbuffer_free(eb);
         return;
     }
 
     char *decoded_body = evhttp_uridecode(buf, 0, &len);
     if (decoded_body == nullptr) {
-        send_response(req, 400, nullptr, R"({"code":400, "op":"register", "info":"Invalid Request!"})");
+        send_response(req, 400, nullptr, R"({"code":400, "op":"login", "info":"Invalid Request!"})");
         return;
     }
     memset(buf, 0, sizeof(buf));
@@ -138,7 +140,7 @@ static void login_request_handler(evhttp_request *req, void *arg) {
         username += *(username_ + i);
     }
     if (username.size() > 50 || username.empty()) {
-        send_response(req, 400, nullptr, R"({"code":400, "op":"register", "info":"Invalid Username Length!"})");
+        send_response(req, 400, nullptr, R"({"code":400, "op":"login", "info":"Invalid Username Length!"})");
         return;
     }
 
@@ -148,17 +150,21 @@ static void login_request_handler(evhttp_request *req, void *arg) {
         password += *(password_ + i);
     }
     if (password.size() > 50 || password.empty()) {
-        send_response(req, 400, nullptr, R"({"code":400, "op":"register", "info":"Invalid Password Length!"})");
+        send_response(req, 400, nullptr, R"({"code":400, "op":"login", "info":"Invalid Password Length!"})");
         return;
     }
 
     auto [uid, token] = controller.loginUser(username, password);
     if (!token.empty()) {
-        stringstream data;
-        data << R"({"code":200, "op":"login", "uid":)" << uid << R"(, "token":")" << token << "\"}";
-        send_response(req, 200, nullptr, data.str());
+        configor::json::value json_data = configor::json::object{
+            { "code", 200 },
+            { "op", "login"},
+            { "uid", uid},
+            { "token", token}
+        };
+        send_response(req, 200, nullptr, configor::json::dump(json_data));
     } else {
-        send_response(req, 400, nullptr, R"({"code":400, "op":"register", "info":"Wrong Username Or Password!"})");
+        send_response(req, 400, nullptr, R"({"code":400, "op":"login", "info":"Wrong Username Or Password!"})");
     }
 }
 
