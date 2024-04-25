@@ -11,6 +11,8 @@
 				"-g",
 				"main.cpp",
 				"MiNiMe.cpp",
+				"log.cpp",
+				"myutils.cpp",
 				"-o",
 				"${fileDirname}/../build/${fileBasenameNoExtension}",
 				"-I",
