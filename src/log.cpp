@@ -14,6 +14,6 @@ void mywarn(string info)
 
 void myerr(string info)
 {
-    cout << "\033[31m[" << MiNiMe::getCurrentTime() << "]\033[0m "
+    cerr << "\033[31m[" << MiNiMe::getCurrentTime() << "]\033[0m "
          << info << endl;
 }

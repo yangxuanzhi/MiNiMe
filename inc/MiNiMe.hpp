@@ -17,6 +17,7 @@
 
 #include <openssl/sha.h>
 #include <mysql.h>
+#include <vector>
 using namespace std;
 
 class MiNiMe {
@@ -39,7 +40,17 @@ public:
      */
     tuple<int, string> loginUser(const string &username, const string &password);
 
+    bool existUser(int uid);
+
+    bool existUser(string& username);
+
+    vector<int> allFriends(int uid);
+
+    void refreshState(int uid);
+
     void checkToken();
+
+    bool checkUidToken(int uid, std::string token);
 
     ~MiNiMe();
     

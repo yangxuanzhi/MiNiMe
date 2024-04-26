@@ -9,6 +9,14 @@
 #include <vector>
 
 #define WS_MAGIC "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" // WebSocket Magic String
+// WebSocket opcode
+#define WS_OPCODE_CONTINUATION 0x00
+#define WS_OPCODE_TEXT         0x01
+#define WS_OPCODE_BINARY       0x02
+#define WS_OPCODE_CLOSE        0x08
+#define WS_OPCODE_PING         0x09
+#define WS_OPCODE_PONG         0x0A
+
 
 std::string base64_encode(const unsigned char* input, int length);
 
@@ -50,3 +58,5 @@ private:
     char mask_[4];
     std::vector<char> payload_;
 };
+
+std::vector<char> wrapWebSocketFrame(const std::string& payload, unsigned char opcode);

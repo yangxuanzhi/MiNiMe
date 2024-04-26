@@ -77,3 +77,37 @@ bool WebSocketFrameParser::parseFrame() {
 
     return true;
 }
+
+vector<char> wrapWebSocketFrame(const string& payload, unsigned char opcode) {
+    bool masked = false;
+    vector<char> frame;
+
+    // FIN, RSV, Opcode
+    frame.push_back(0x80 | opcode);
+
+    // Masked flag and payload length
+    unsigned long long payloadLength = payload.size();
+    if (payloadLength < 126) {
+        frame.push_back((masked ? 0x80 : 0x00) | payloadLength);
+    } else if (payloadLength < 65536) {
+        frame.push_back((masked ? 0x80 : 0x00) | 126);
+        frame.push_back((payloadLength >> 8) & 0xFF);
+        frame.push_back(payloadLength & 0xFF);
+    } else {
+        frame.push_back((masked ? 0x80 : 0x00) | 127);
+        for (int i = 7; i >= 0; --i) {
+            frame.push_back((payloadLength >> (8 * i)) & 0xFF);
+        }
+    }
+
+    // Masking key
+    if (masked) {
+        unsigned char maskingKey[4] = {0x12, 0x23, 0x34, 0x45}; // Dummy masking key
+        frame.insert(frame.end(), maskingKey, maskingKey + 4);
+    }
+
+    // Append payload
+    frame.insert(frame.end(), payload.begin(), payload.end());
+
+    return frame;
+}

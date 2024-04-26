@@ -10,6 +10,8 @@ include_directories(
 add_executable(MiNiMe
         src/main.cpp
         src/MiNiMe.cpp
+        src/log.cpp
+        src/myutils.cpp
 )
 
 target_link_directories(MiNiMe PRIVATE /usr/lib64/mysql/)

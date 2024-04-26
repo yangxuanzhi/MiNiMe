@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <sstream>
+#include <unordered_map>
 
 #include <event2/buffer.h>
 #include <event2/event.h>
@@ -15,6 +16,11 @@
 #include <evbuffer_internal.h>
 #include <event2/listener.h>
 #include <event2/bufferevent.h>
+#include <event2/bufferevent_struct.h>
+
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include "configor/json.hpp"
 
@@ -22,9 +28,22 @@
 #include "log.hpp"
 #include "myutils.hpp"
 
+#define __DEBUG__ true
+
 using namespace std;
 
 MiNiMe controller;
+event_base *base;
+
+struct websocket_event {
+    int uid=-1;
+    bufferevent *bev;
+    event *tev;
+    time_t lastActive;
+};
+
+unordered_map<bufferevent*, websocket_event*> *bev_wev;
+unordered_map<int, websocket_event*> *uid_wev;
 
 /************************************ 全局工具函数 *****************************************/
 
@@ -39,15 +58,39 @@ static void send_response(evhttp_request *req, int code, const char *reason, con
 /************************************ HTTP回调函数 *****************************************/
 
 static void timer_cb(evutil_socket_t fd, short ev, void *arg) {
-    controller.checkToken();
-    
+    if (!__DEBUG__) {
+        controller.checkToken();
+
+        size_t batch = bev_wev->size() / 10;
+        size_t all = bev_wev->size();
+        time_t curTime = time(0);
+        auto iter = bev_wev->begin();
+        for (int j = 0; j < batch; j++) {
+            if (iter == bev_wev->end()) {
+                iter = bev_wev->begin();
+                continue;
+            }
+            bufferevent *bev = iter->first;
+            websocket_event *wev = iter->second;
+            if (wev->lastActive + 60 < curTime || (wev->lastActive + 30 < curTime && wev->uid == -1)) {
+                bufferevent_free(bev);
+                if (wev->uid >= 0) uid_wev->erase(wev->uid);
+                if (wev->tev) event_free(wev->tev);
+                free(wev);
+                bev_wev->erase(bev);
+            }
+        }
+    }
+
     timeval tv{1, 0};
     evtimer_add((event*)arg, &tv);
 }
 
 static void signal_cb(evutil_socket_t fd, short event, void *arg)
 {
-    printf("%s signal received\n", strsignal(fd));
+    stringstream ss;
+    ss << strsignal(fd) << " signal received";
+    mywarn(ss.str());
     event_base_loopbreak((event_base*)arg);
 }
 
@@ -170,15 +213,47 @@ static void login_request_handler(evhttp_request *req, void *arg) {
 
 /************************************ WebSocket回调函数 *****************************************/
 
+static void websocket_timer_cb(evutil_socket_t fd, short ev, void *arg) {
+    websocket_event *wev = (websocket_event*)arg;
+
+    if (!__DEBUG__) {
+        vector<char> wspack = wrapWebSocketFrame("", WS_OPCODE_PING);
+        bufferevent_write(wev->bev, wspack.data(), wspack.size());
+    }
+
+    timeval tv{10, 0};
+    evtimer_add(wev->tev, &tv);
+}
+
 void read_cb(struct bufferevent *bev, void *ctx) {
     // 读取消息
+    stringstream logss;
     char buf[4096];
     size_t len = bufferevent_read(bev, buf, sizeof(buf) - 1);
     buf[len] = '\0';
+    logss << "WebSocket服务器请求接到来自 ";
+
+    struct sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+    evutil_socket_t sockfd = bufferevent_getfd(bev);
+
+    if (getpeername(sockfd, (struct sockaddr*)&addr, &addr_len) == -1) {
+        perror("getsockname");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    // 打印本地地址信息
+    char ip[INET_ADDRSTRLEN];
+    logss << inet_ntop(AF_INET, &addr.sin_addr, ip, sizeof(ip)) << ":";
+    logss << ntohs(addr.sin_port) << " 的消息：";
+    
 
     // 判断是否是握手信息
     if (strstr(buf, "Upgrade: websocket") != NULL 
         && strstr(buf, "Connection: Upgrade") != NULL) {
+        logss << buf;
+        mylog(logss.str());
         // Find the value of Sec-WebSocket-Key
         char *key_start = strstr(buf, "Sec-WebSocket-Key: ");
         if (key_start != NULL) {
@@ -199,8 +274,16 @@ void read_cb(struct bufferevent *bev, void *ctx) {
                 char response[256];
                 snprintf(response, sizeof(response), response_template, accept_key.c_str());
                 
-                // Send the handshake response
+                // 发送websocket握手响应
                 bufferevent_write(bev, response, strlen(response));
+
+                // 设置连接检测
+                event *timer_ev = new event;
+                (*bev_wev)[bev]->tev = timer_ev;
+                evtimer_assign(timer_ev, base, websocket_timer_cb, (*bev_wev)[bev]);
+
+                timeval tv{10, 0};
+                evtimer_add(timer_ev, &tv);
                 return;
             }
         }
@@ -223,14 +306,41 @@ void read_cb(struct bufferevent *bev, void *ctx) {
             // stringstream ss;
             // ss << "接收到Websocket消息，长度：" << parser.getPayloadLength()
             //    << "，类型：" << parser.getOpcode() << "，内容：";
+            unsigned char opcode = parser.getOpcode();
+            if (opcode == WS_OPCODE_PONG) {
+                (*bev_wev)[bev]->lastActive = time(0);
+                return;
+            }
             auto& payload = parser.getPayload();
-            // for (int i = 0; i < parser.getPayloadLength(); i++) {
-            //     ss << payload[i];
-            // }
-            // mylog(ss.str());
+
+            stringstream ss;
+            for (int i = 0; i < parser.getPayloadLength(); i++) {
+                ss << payload[i];
+            }
+            mylog(logss.str() + ss.str());
+
+            configor::json::value json_data = configor::json::parse(ss.str());
+            string ws_op = (string)json_data["op"];
+            if (ws_op == "login") {
+                int uid = (int)json_data["uid"];
+                string token = (string)json_data["token"];
+                if (controller.checkUidToken(uid, token)) {
+                    (*uid_wev)[uid] = (*bev_wev)[bev];
+                }
+                else {
+                    websocket_event *wev = (*bev_wev)[bev];
+                    bufferevent_free(bev);
+                    if (wev->uid >= 0) uid_wev->erase(wev->uid);
+                    if (wev->tev) event_free(wev->tev);
+                    free(wev);
+                    bev_wev->erase(bev);
+                }
+            }
+            
         }
         else {
-            mywarn("接收到无法解析的Websocket消息");
+            mylog(logss.str());
+            mywarn("无法解析接收到的Websocket消息！");
         }
     }
 }
@@ -247,6 +357,10 @@ void event_cb(struct bufferevent *bev, short events, void *ctx) {
 void accept_conn_cb(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *address, int socklen, void *ctx) {
     struct event_base *base = evconnlistener_get_base(listener);
     struct bufferevent *bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
+    websocket_event* wev = new websocket_event;
+    wev->bev = bev;
+    wev->lastActive = time(0);
+    (*bev_wev)[bev] = wev;
     bufferevent_setcb(bev, read_cb, nullptr, event_cb, NULL);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 }
@@ -262,7 +376,10 @@ int main()
 {
     controller = MiNiMe();
 
-    event_base *base = event_base_new();
+    bev_wev = new unordered_map<bufferevent*, websocket_event*>();
+    uid_wev = new unordered_map<int, websocket_event*>();
+
+    base = event_base_new();
 
     // HTTP服务器
     ev_uint16_t http_port = 8080;
